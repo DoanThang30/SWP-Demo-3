@@ -1,27 +1,23 @@
 import axios from 'axios';
-import { API_BASE_URL, API_TIMEOUT } from '@/config/api';
+
+// Update this to your local SQL database API endpoint
+const API_BASE_URL = 'http://localhost:5000/api';
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add request interceptor for authentication
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+// Add auth token to requests
+axiosInstance.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+});
 
 // Add response interceptor for error handling
 axiosInstance.interceptors.response.use(

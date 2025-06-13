@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,15 +33,32 @@ import {
   UserCog,
   LogOut
 } from "lucide-react";
-import { adminApi, dashboardApi } from "@/services/api";
-import type { User as UserType, DashboardStats, SystemLog } from "@/types/api";
+import { adminApi, dashboardApi, type User, type SystemLog } from "@/services/admin.service";
+import { useToast } from "@/hooks/use-toast";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+
+interface DashboardStats {
+  totalUsers: number;
+  totalDonors: number;
+  totalStaff: number;
+  totalBloodRequests: number;
+  pendingBloodRequests: number;
+  totalDonations: number;
+  recentDonations: number;
+  bloodInventory: {
+    bloodType: string;
+    units: number;
+  }[];
+}
 
 const Admin = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
+  const { user, logout } = useAuth();
+  const { toast } = useToast();
+  const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [users, setUsers] = useState<UserType[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,18 +71,31 @@ const Admin = () => {
           adminApi.getSystemLogs()
         ]);
 
-        if (statsResponse.success) setStats(statsResponse.data);
-        if (usersResponse.success) setUsers(usersResponse.data.items);
-        if (logsResponse.success) setLogs(logsResponse.data.items);
+        if (statsResponse.success) {
+          setStats(statsResponse.data);
+        }
+
+        if (usersResponse.success) {
+          setUsers(usersResponse.data.items);
+        }
+
+        if (logsResponse.success) {
+          setLogs(logsResponse.data.items);
+        }
       } catch (error) {
-        console.error("Error fetching admin data:", error);
+        console.error('Error fetching data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch dashboard data",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [toast]);
 
   const handleLogout = async () => {
     // Implement logout logic
@@ -193,8 +224,8 @@ const Admin = () => {
                 <div className="flex space-x-4 mb-6">
                   <Input
                     placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1"
                   />
                   <Select value={filterRole} onValueChange={setFilterRole}>
@@ -210,41 +241,24 @@ const Admin = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-4">
-                  {users.map((user) => (
-                    <Card key={user.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-4 mb-2">
-                              <h3 className="text-lg font-semibold">{user.name}</h3>
-                              <Badge className={getRoleColor(user.role)}>
-                                {user.role}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                              <div className="flex items-center space-x-1">
-                                <UserIcon className="h-4 w-4 text-blue-500" />
-                                <span>{user.email}</span>
-                              </div>
-                              {user.phone && (
-                                <div className="flex items-center space-x-1">
-                                  <Phone className="h-4 w-4 text-green-500" />
-                                  <span>{user.phone}</span>
-                                </div>
-                              )}
-                              {user.location && (
-                                <div className="flex items-center space-x-1">
-                                  <MapPin className="h-4 w-4 text-orange-500" />
-                                  <span>{user.location}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="h-4 w-4 text-purple-500" />
-                                <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
-                              </div>
-                            </div>
-                          </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Blood Type</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>{`${user.firstName} ${user.lastName}`}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{user.role}</TableCell>
+                        <TableCell>{user.bloodType}</TableCell>
+                        <TableCell>
                           <div className="flex space-x-2">
                             <Button variant="outline" size="sm">
                               Edit
@@ -253,11 +267,11 @@ const Admin = () => {
                               Delete
                             </Button>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
@@ -272,32 +286,26 @@ const Admin = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {logs.map((log) => (
-                    <Card key={log.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-4 mb-2">
-                              <Badge className="bg-gray-100 text-gray-800">
-                                {log.type}
-                              </Badge>
-                              <span className="text-sm text-gray-500">
-                                {new Date(log.timestamp).toLocaleString()}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-600">{log.message}</p>
-                            {log.userId && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                User ID: {log.userId}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Message</TableHead>
+                      <TableHead>User ID</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>{log.type}</TableCell>
+                        <TableCell>{log.message}</TableCell>
+                        <TableCell>{log.userId}</TableCell>
+                        <TableCell>{new Date(log.createdAt).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
